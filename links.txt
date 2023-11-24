@@ -6,7 +6,7 @@ Matheus Brisqui Martinez || RM: 97892
 
 
 
-Link do github:
+Link do github: https://github.com/matheusbrisqui/global_edge
 Link do vídeo: https://youtu.be/AsOkHzi0s2Q
 Link do wokwi: https://wokwi.com/projects/382210993722529793 
 
