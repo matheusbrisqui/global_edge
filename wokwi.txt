@@ -1,0 +1,410 @@
+/******************************************************************************
+Transistor used for piezo buzzer: 
+https://media.digikey.com/pdf/Data%20Sheets/ON%20Semiconductor%20PDFs/PN2222.pdf
+********************************************************************************/
+
+/*******************************************
+Level shifter used for LCD display:
+https:www.ti.com/lit/ds/symlink/txs0108e.pdf
+********************************************/
+
+/*****************************
+Time API
+http://worldtimeapi.org/api/timezone/America/Sao_Paulo
+*****************************/
+
+/***********************
+Weather API
+https://open-meteo.com/
+***********************/
+
+#include <Keypad.h>
+#include "Clock.h"
+#include "Weather.h"
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <LiquidCrystal_I2C.h>
+
+#define I2C_ADDR    0x27
+#define LCD_COLUMNS 16
+#define LCD_LINES   2
+
+//add
+
+//defines:
+//defines de id mqtt e tópicos para publicação e subscribe denominado TEF(Telemetria e Monitoramento de Equipamentos)
+#define TOPICO_SUBSCRIBE    "/TEF/lamp104/cmd"        //tópico MQTT de escuta
+#define TOPICO_PUBLISH      "/TEF/lamp104/attrs"      //tópico MQTT de envio de informações para Broker
+#define TOPICO_PUBLISH_Tt    "/TEF/lamp104/attrs/temppp"    //tópico MQTT de envio de informações para Broker
+#define TOPICO_PUBLISH_H    "/TEF/lamp104/attrs/humiii"    //tópico MQTT de envio de informações para Broker
+                                                      //IMPORTANTE: recomendamos fortemente alterar os nomes
+                                                      //            desses tópicos. Caso contrário, há grandes
+                                                      //            chances de você controlar e monitorar o ESP32
+                                                      //            de outra pessoa.
+#define ID_MQTT  "fiware_104"   //id mqtt (para identificação de sessão)
+                                 //IMPORTANTE: este deve ser único no broker (ou seja,
+                                 //            se um client MQTT tentar entrar com o mesmo
+                                 //            id de outro já conectado ao broker, o broker
+                                 //            irá fechar a conexão de um deles).
+                                 // o valor "n" precisa ser único!
+                               
+ 
+// WIFI
+const char* SSID = "Wokwi-GUEST"; // SSID / nome da rede WI-FI que deseja se conectar
+const char* PASSWORD = ""; // Senha da rede WI-FI que deseja se conectar
+ 
+// MQTT
+const char* BROKER_MQTT = "46.17.108.113"; //URL do broker MQTT que se deseja utilizar
+int BROKER_PORT = 1883; // Porta do Broker MQTT
+ 
+//Variáveis e objetos globais
+WiFiClient espClient; // Cria o objeto espClient
+PubSubClient MQTT(espClient); // Instancia o Cliente MQTT passando o objeto espClient
+char EstadoSaida = '0';  //variável que armazena o estado atual da saída
+ 
+//Prototypes
+void initSerial();
+void initWiFi();
+void initMQTT();
+void reconectWiFi();
+void mqtt_callback(char* topic, byte* payload, unsigned int length);
+void VerificaConexoesWiFIEMQTT(void);   
+
+//add
+
+uint8_t state;
+unsigned long clockTimer;
+unsigned long weatherAPItimer;
+unsigned long weatherDisplayTimer;
+
+
+
+uint8_t valIndex;
+uint8_t cursorPos;
+char entered_value [6];
+const uint8_t ROWS = 4;
+const uint8_t COLS = 4;
+char keys[ROWS][COLS] = {
+  { '1', '2', '3', 'A' },
+  { '4', '5', '6', 'B' },
+  { '7', '8', '9', 'C' },
+  { '*', '0', '#', 'D' }
+};
+uint8_t colPins[COLS] = { 1, 0, 3, 2 };
+uint8_t rowPins[ROWS] = { 4, 5, 6, 7 };
+
+LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLUMNS, LCD_LINES);
+Clock rtc(&lcd);
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+void enterTime()
+{
+  state = 1;
+  memset(&entered_value[0], 0, sizeof(entered_value));
+  cursorPos = 0;
+  valIndex = 0;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Set clock then  ");
+  lcd.setCursor(0, 1);
+  lcd.print("press # to save.");
+  delay(1000);
+  lcd.clear();
+}
+
+void enterAlarm()
+{
+  state = 2;
+  memset(&entered_value[0], 0, sizeof(entered_value));
+  cursorPos = 0;
+  valIndex = 0;
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Enter alarm time");
+  lcd.setCursor(0, 1);
+  lcd.print("press # to save.");
+  delay(1000);
+  lcd.clear();
+}
+
+void nextChar(char key)
+{
+  if (valIndex < 6)
+  {
+    entered_value[valIndex] = key;
+    lcd.setCursor(0, 0);
+    lcd.print(entered_value);
+    cursorPos++;
+    valIndex++;
+  }
+}
+
+void eraseChar()
+{
+  if (valIndex > 0 )
+  {
+    valIndex--;
+    cursorPos--;
+    entered_value[valIndex] = '\0';
+    lcd.setCursor(cursorPos, 0);
+    lcd.print(' ');
+    lcd.setCursor(cursorPos, 0);
+  }
+}
+
+void keyPadState0()
+{
+  char key = keypad.getKey();
+  switch(key)
+  {
+    case 'A':
+      enterAlarm();
+      break;
+    case 'C':
+      enterTime();
+      break;
+    case '#':
+      rtc.silence();
+      break;
+    case '*':
+      rtc.addToSnooze();
+      break;
+  }
+}
+
+void keyPadState1()
+{
+  char key = keypad.getKey();
+  switch(key)
+  {
+    case '#':
+      rtc.setTime(entered_value);
+      state = 0;
+      break;
+    case '*':
+      eraseChar();
+      break;
+    default:
+      if (isDigit(key))
+      {
+        nextChar(key);
+      }
+      break;
+  }
+}
+
+void keyPadState2()
+{
+  char key = keypad.getKey();
+  switch(key)
+  {
+    case '#':
+      rtc.setAlarm(entered_value);
+      state = 0;
+      break;
+    case '*':
+      eraseChar();
+      break;
+    default:
+      if (isDigit(key))
+      {
+        nextChar(key);
+      }
+      break;
+  }
+}
+
+void getInput()
+{
+  switch (state)
+  {
+    case 0:
+      keyPadState0();
+      break;
+    case 1:
+      keyPadState1();
+      break;
+    case 2:
+      keyPadState2();
+      break;
+  }
+}
+
+void initSerial()
+{
+    Serial.begin(115200);
+}
+ 
+//Função: inicializa e conecta-se na rede WI-FI desejada
+//Parâmetros: nenhum
+//Retorno: nenhum
+void initWiFi()
+{
+    delay(10);
+    Serial.println("------Conexao WI-FI------");
+    Serial.print("Conectando-se na rede: ");
+    Serial.println(SSID);
+    Serial.println("Aguarde");
+     
+    reconectWiFi();
+}
+ 
+//Função: inicializa parâmetros de conexão MQTT(endereço do
+//        broker, porta e seta função de callback)
+//Parâmetros: nenhum
+//Retorno: nenhum
+void initMQTT()
+{
+    MQTT.setServer(BROKER_MQTT, BROKER_PORT);   //informa qual broker e porta deve ser conectado
+    MQTT.setCallback(mqtt_callback);            //atribui função de callback (função chamada quando qualquer informação de um dos tópicos subescritos chega)
+}
+ 
+//Função: função de callback
+//        esta função é chamada toda vez que uma informação de
+//        um dos tópicos subescritos chega)
+//Parâmetros: nenhum
+//Retorno: nenhum
+void mqtt_callback(char* topic, byte* payload, unsigned int length)
+{
+    String msg;
+     
+    //obtem a string do payload recebido
+    for(int i = 0; i < length; i++)
+    {
+       char c = (char)payload[i];
+       msg += c;
+    }
+   
+    Serial.print("- Mensagem recebida: ");
+    Serial.println(msg);
+   
+}
+ 
+//Função: reconecta-se ao broker MQTT (caso ainda não esteja conectado ou em caso de a conexão cair)
+//        em caso de sucesso na conexão ou reconexão, o subscribe dos tópicos é refeito.
+//Parâmetros: nenhum
+//Retorno: nenhum
+void reconnectMQTT()
+{
+    while (!MQTT.connected())
+    {
+        Serial.print("* Tentando se conectar ao Broker MQTT: ");
+        Serial.println(BROKER_MQTT);
+        if (MQTT.connect(ID_MQTT))
+        {
+            Serial.println("Conectado com sucesso ao broker MQTT!");
+            MQTT.subscribe(TOPICO_SUBSCRIBE);
+        }
+        else
+        {
+            Serial.println("Falha ao reconectar no broker.");
+            Serial.println("Havera nova tentatica de conexao em 2s");
+            delay(2000);
+        }
+    }
+}
+ 
+//Função: reconecta-se ao WiFi
+//Parâmetros: nenhum
+//Retorno: nenhum
+void reconectWiFi()
+{
+    //se já está conectado a rede WI-FI, nada é feito.
+    //Caso contrário, são efetuadas tentativas de conexão
+    if (WiFi.status() == WL_CONNECTED)
+        return;
+         
+    WiFi.begin(SSID, PASSWORD); // Conecta na rede WI-FI
+     
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        delay(100);
+        Serial.print(".");
+    }
+   
+    Serial.println();
+    Serial.print("Conectado com sucesso na rede ");
+    Serial.print(SSID);
+    Serial.println("IP obtido: ");
+    Serial.println(WiFi.localIP());
+}
+ 
+//Função: verifica o estado das conexões WiFI e ao broker MQTT.
+//        Em caso de desconexão (qualquer uma das duas), a conexão
+//        é refeita.
+//Parâmetros: nenhum
+//Retorno: nenhum
+void VerificaConexoesWiFIEMQTT(void)
+{
+    if (!MQTT.connected())
+        reconnectMQTT(); //se não há conexão com o Broker, a conexão é refeita
+     
+     reconectWiFi(); //se não há conexão com o WiFI, a conexão é refeita
+}
+
+
+void setup() 
+{
+  initMQTT();
+  pinMode(8, OUTPUT);
+  pinMode(10, OUTPUT);
+  Wire.begin(18, 19);
+  lcd.init();
+  lcd.backlight();
+  WiFi.begin(SSID, PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) 
+  {
+    lcd.print(".");
+    delay(1000);
+  }
+  lcd.clear();
+  if (!rtc.setTimeFromAPI())
+  {
+    char t [] = __TIME__;
+    char compileTime [] = { t[0], t[1], t[3], t[4], t[6], t[7] };
+    rtc.setTime(compileTime);
+  }
+  getWeather(lcd);
+  printWeather(lcd);
+
+}
+
+void loop() 
+{
+  // Verifica e reconecta Wi-Fi e MQTT se necessário
+  VerificaConexoesWiFIEMQTT();
+
+  // Simula dados de temperatura e umidade
+  float temperatura = 25.50;
+  float umidade = 60.0;
+  if (state == 0)
+  {
+    unsigned long millisNow = millis();
+    if (millisNow - clockTimer >= 1000)
+    {
+      clockTimer = millisNow;
+      rtc.updateClock();
+    }
+    if (millisNow - weatherDisplayTimer >= 10000)
+    {
+      weatherDisplayTimer = millisNow;
+      printWeather(lcd);
+    }
+    if (millisNow - weatherAPItimer >= 3600000)
+    {
+      weatherAPItimer = millisNow;
+      getWeather(lcd);
+    }
+  }
+  getInput();
+   // Converte os dados para uma string
+  String payload = String("{\"temperatura\": ") + temperatura + String(", \"umidade\": ") + umidade + String("}");
+
+  // Publica os dados no tópico
+  MQTT.publish(TOPICO_PUBLISH_Tt, payload.c_str());
+
+  // Aguarda um intervalo de tempo antes de enviar novamente (ajuste conforme necessário)
+  delay(1000);
+}
