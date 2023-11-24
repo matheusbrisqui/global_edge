@@ -9,38 +9,19 @@ Ao incorporar a possibilidade de acompanhamento remoto, o sistema visa criar uma
 Em resumo, a proposta apresenta uma abordagem abrangente e tecnologicamente avançada para resolver o desafio da gestão de doses de medicamentos, garantindo uma administração correta, eficaz e segura para melhorar os resultados dos tratamentos médicos.
 
 
-Explicação do código:
-O código é um programa para um dispositivo baseado no ESP32 que utiliza diversos módulos e APIs para realizar várias funcionalidades.
-Inclusão de Bibliotecas:
--#include <Keypad.h>: Biblioteca para lidar com um teclado matricial.
--"Clock.h": Arquivo de cabeçalho (header) para a classe Clock, que parece ser usada para operações relacionadas ao relógio.
--"Weather.h": Arquivo de cabeçalho para a manipulação de informações meteorológicas.
--#include <WiFi.h>: Biblioteca para a comunicação Wi-Fi.
--#include <PubSubClient.h>: Cliente MQTT para comunicação com um broker MQTT.
--#include <HTTPClient.h>: Biblioteca para fazer requisições HTTP.
--#include <ArduinoJson.h>: Biblioteca para manipulação de dados JSON.
--#include <LiquidCrystal_I2C.h>: Biblioteca para controlar displays LCD com interface I2C.
+Este código é destinado a um dispositivo baseado no ESP32, incorporando vários módulos e APIs para realizar diversas funcionalidades. 
 
-Definições Iniciais:
--Define o endereço I2C, número de colunas e linhas para o display LCD.
--Define os tópicos MQTT para publicação e subscrição, bem como o ID MQTT.
--Configurações de Wi-Fi e MQTT.
+O propósito geral do código é criar um dispositivo que gerencie doses de medicamentos, fornecendo alertas personalizados e permitindo o acompanhamento remoto por meio de diversos componentes.
 
-Inicialização de Objetos:
--WiFiClient espClient;: Objeto para a comunicação Wi-Fi.
--PubSubClient MQTT(espClient);: Objeto para a comunicação MQTT.
--LiquidCrystal_I2C lcd(I2C_ADDR, LCD_COLUMNS, LCD_LINES);: Objeto para controlar o display LCD.
--Clock rtc(&lcd);: Objeto para operações relacionadas ao relógio.
--Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);: Objeto para lidar com o teclado matricial.
+O código inclui a utilização de módulos específicos, como um transistor para controlar um buzzer piezo, um level shifter para um display LCD, e estabelece conexões com APIs de tempo e clima.
 
-Funções de Controle de Tempo:
--enterTime(), enterAlarm(): Funções para configurar o relógio e o alarme.
--nextChar(), eraseChar(): Funções para manipular a entrada de dados.
--keyPadState0(), keyPadState1(), keyPadState2(): Funções que definem o comportamento do teclado em diferentes estados.
+Diversas bibliotecas são incorporadas, como Keypad, WiFi, PubSubClient, e LiquidCrystal_I2C. Além disso, são utilizadas APIs para obter informações de tempo e clima.
 
-Funções de Configuração:
--initSerial(), initWiFi(), initMQTT(): Funções para inicializar a comunicação serial, Wi-Fi e MQTT.
--reconectWiFi(), `reconnectMQ
+As configurações e a inicialização envolvem a definição de parâmetros como tópicos MQTT e credenciais de Wi-Fi. Também são inicializados objetos para facilitar a comunicação, como WiFiClient para Wi-Fi, PubSubClient para MQTT, LiquidCrystal_I2C para o display LCD, um objeto Clock para operações relacionadas ao relógio, e um objeto Keypad para lidar com a entrada do teclado matricial.
+
+Funções específicas são implementadas para configuração do relógio e do alarme, manipulação da entrada de dados do teclado, e controle do estado do dispositivo.
+
+No loop principal, o código verifica e reconecta Wi-Fi e MQTT se necessário. Simula dados de temperatura e umidade (a serem substituídos por dados reais), publica esses dados em um tópico MQTT e aguarda um intervalo de tempo antes de repetir o processo.
 
 Para executar o código no simulador é somente esperar a internet ser concetada e clicar nas telas do teclado (que demoram um pouco para serem gravadas no cursor, talvez tenha que clicar mais de uma vez), além disso clicar nas telas conforme a legenda do lado, podendo alterar o horário, definir o alarme, entrar no modo silencioso ou concluir as alterações.
 
