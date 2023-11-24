@@ -1,3 +1,8 @@
+Guilherme Rezende Bezerra || RM: 98508
+Matheus Brisqui Martinez || RM: 97892
+
+
+
 O problema de saúde abordado refere-se à gestão e administração adequada de doses de medicamentos. É comum que pacientes enfrentem desafios ao seguir corretamente os horários e dosagens prescritas, levando a lapsos na adesão ao tratamento. Essa falta de aderência pode comprometer a eficácia terapêutica e, consequentemente, a saúde geral do paciente. A não conformidade com as instruções de medicação pode resultar em consequências sérias, impactando negativamente os resultados dos tratamentos médicos.
 
 A solução proposta consiste no desenvolvimento de um sistema de alerta e gestão de doses de medicamentos. Este sistema tem como objetivo principal fornecer lembretes precisos e personalizados aos usuários, garantindo a administração correta dos medicamentos. Além disso, visa permitir o acompanhamento remoto por cuidadores e médicos, proporcionando uma abordagem abrangente para assegurar a eficácia do tratamento.
